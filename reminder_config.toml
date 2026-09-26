@@ -1,0 +1,31 @@
+# Health & Work Reminder Configuration
+# Intervals are in minutes. Default is 60 minutes (1 hour) for both.
+
+# Interval in minutes between water reminders
+water_interval_mins = 60
+
+# Interval in minutes between break reminders
+break_interval_mins = 60
+
+# Optional stagger offset in minutes (e.g., 30 will stagger breaks 30 mins after water)
+stagger_minutes = 0
+
+# Play sound when notification appears
+sound_enabled = true
+
+# Show on-screen pop-up dialog box (in addition to toast notification)
+popup_enabled = true
+
+# Water reminder title and custom message (leave empty to use rotating health tips)
+water_title = "💧 Time to Drink Water!"
+water_message = ""
+
+# Optional script/command to execute when water reminder fires (e.g. "scripts/water_hook.bat" or "powershell ...")
+water_script = ""
+
+# Break reminder title and custom message (leave empty to use rotating health tips)
+break_title = "🧘 Time to Take a Break!"
+break_message = ""
+
+# Optional script/command to execute when break reminder fires
+break_script = ""
