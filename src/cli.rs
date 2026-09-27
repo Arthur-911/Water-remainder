@@ -50,6 +50,18 @@ pub struct Cli {
     #[arg(long = "no-popup")]
     pub no_popup: bool,
 
+    /// Disable AI voice reminder message
+    #[arg(long = "no-voice")]
+    pub no_voice: bool,
+
+    /// Custom voice audio file (.mp3 or .wav)
+    #[arg(long = "voice-file")]
+    pub voice_file: Option<String>,
+
+    /// Test-play the AI voice reminder immediately and exit
+    #[arg(long = "test-voice")]
+    pub test_voice: bool,
+
     /// Run quietly (suppress countdown, only log events)
     #[arg(short = 'q', long = "quiet")]
     pub quiet: bool,
@@ -78,6 +90,12 @@ impl Cli {
         }
         if self.no_popup {
             cfg.popup_enabled = false;
+        }
+        if self.no_voice {
+            cfg.voice_enabled = false;
+        }
+        if let Some(ref vf) = self.voice_file {
+            cfg.voice_file = vf.clone();
         }
     }
 }

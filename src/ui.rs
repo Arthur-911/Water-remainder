@@ -22,6 +22,7 @@ pub fn print_status(
     water_interval: Duration,
     break_interval: Duration,
     popup_enabled: bool,
+    voice_enabled: bool,
     water_script: &str,
     break_script: &str,
 ) {
@@ -44,6 +45,14 @@ pub fn print_status(
         "Enabled (Toast)".green(),
         if popup_enabled {
             "Enabled (Top-most Dialog)".green()
+        } else {
+            "Disabled".yellow()
+        }
+    );
+    println!(
+        "  AI Voice Alert: {}",
+        if voice_enabled {
+            "Enabled (\"It's time to drink water and get rest\")".green()
         } else {
             "Disabled".yellow()
         }

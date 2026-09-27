@@ -6,6 +6,7 @@ A high-performance, non-intrusive background runner built in **Rust** for Window
 
 ## ✨ Features
 
+- **AI-Generated Voice Reminders**: Speaks a natural, friendly AI-generated voice message (*"It's time to drink water and get rest"*) whenever a reminder triggers so you never miss it even if looking away.
 - **Native Windows Toast Notifications**: Clean desktop popups with audio chimes in the bottom-right corner that don't interrupt your typing.
 - **On-Screen Pop-up Dialog Window**: Prominent top-most dialog box that pops up right on your screen so you never miss an hourly water or break reminder even if Windows Focus Assist / Do Not Disturb is enabled.
 - **Hourly Health Schedules**: Default 60-minute intervals for both water and desk/eye breaks.
@@ -106,6 +107,18 @@ sound_enabled = true
 # Show on-screen pop-up dialog box (in addition to toast notification)
 popup_enabled = true
 
+# Play AI-generated voice message ("It's time to drink water and get rest")
+voice_enabled = true
+
+# Play voice message on water reminder
+voice_on_water = true
+
+# Play voice message on break reminder
+voice_on_break = true
+
+# Path to voice audio file (leave default or point to a custom .mp3 / .wav file)
+voice_file = "assets/voice_reminder.mp3"
+
 # Custom title and message (leave empty to use rotating health tips)
 water_title = "💧 Time to Drink Water!"
 water_message = ""
@@ -128,6 +141,9 @@ break_script = "scripts/sample_break_hook.ps1"
 You can run the binary directly or via `run.bat` with command-line flags:
 
 ```powershell
+# Test-play the AI voice reminder immediately
+.\run.bat --test-voice
+
 # Custom 45-minute water and 60-minute break
 .\run.bat --water 45 --break 60
 
@@ -142,6 +158,12 @@ You can run the binary directly or via `run.bat` with command-line flags:
 
 # Run quietly (no countdown bar, ideal for background services)
 .\run.bat --quiet
+
+# Disable AI voice message
+.\run.bat --no-voice
+
+# Point to a custom voice file
+.\run.bat --voice-file "assets\custom_voice.mp3"
 
 # Disable sound chime
 .\run.bat --no-sound

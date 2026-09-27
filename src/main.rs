@@ -23,6 +23,18 @@ fn main() {
 
     ui::print_banner();
 
+    if cli.test_voice {
+        println!("{}", "Testing AI voice message...".bright_cyan());
+        let voice_arg = if cfg.voice_file.is_empty() {
+            None
+        } else {
+            Some(cfg.voice_file.as_str())
+        };
+        crate::notification::voice::play_voice_blocking(voice_arg);
+        println!("{}", "Voice message test complete.".bright_green());
+        return;
+    }
+
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 

@@ -16,6 +16,18 @@ sound_enabled = true
 # Show on-screen pop-up dialog box (in addition to toast notification)
 popup_enabled = true
 
+# Play AI-generated voice message ("It's time to drink water and get rest")
+voice_enabled = true
+
+# Play voice message on water reminder
+voice_on_water = true
+
+# Play voice message on break reminder
+voice_on_break = true
+
+# Path to voice audio file (leave default or point to a custom .mp3 / .wav file)
+voice_file = "assets/voice_reminder.mp3"
+
 # Water reminder title and custom message (leave empty to use rotating health tips)
 water_title = "💧 Time to Drink Water!"
 water_message = ""

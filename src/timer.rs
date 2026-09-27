@@ -24,6 +24,10 @@ pub struct ReminderRunner {
     break_script: String,
     sound_enabled: bool,
     popup_enabled: bool,
+    voice_enabled: bool,
+    voice_on_water: bool,
+    voice_on_break: bool,
+    voice_file: String,
     quiet: bool,
 }
 
@@ -85,6 +89,10 @@ impl ReminderRunner {
             break_script: cfg.break_script.clone(),
             sound_enabled: cfg.sound_enabled,
             popup_enabled: cfg.popup_enabled,
+            voice_enabled: cfg.voice_enabled,
+            voice_on_water: cfg.voice_on_water,
+            voice_on_break: cfg.voice_on_break,
+            voice_file: cfg.voice_file.clone(),
             quiet,
         }
     }
@@ -95,6 +103,7 @@ impl ReminderRunner {
             self.water_interval,
             self.break_interval,
             self.popup_enabled,
+            self.voice_enabled,
             &self.water_script,
             &self.break_script,
         );
@@ -142,11 +151,20 @@ impl ReminderRunner {
             ui::clear_line();
         }
 
+        let voice_active = self.voice_enabled && self.voice_on_water;
+        let voice_arg = if self.voice_file.is_empty() {
+            None
+        } else {
+            Some(self.voice_file.as_str())
+        };
+
         let _ = Notifier::show_water_reminder(
             &self.water_title,
             tip,
             self.sound_enabled,
             self.popup_enabled,
+            voice_active,
+            voice_arg,
         );
 
         if !self.water_script.is_empty() {
@@ -166,11 +184,20 @@ impl ReminderRunner {
             ui::clear_line();
         }
 
+        let voice_active = self.voice_enabled && self.voice_on_break;
+        let voice_arg = if self.voice_file.is_empty() {
+            None
+        } else {
+            Some(self.voice_file.as_str())
+        };
+
         let _ = Notifier::show_break_reminder(
             &self.break_title,
             tip,
             self.sound_enabled,
             self.popup_enabled,
+            voice_active,
+            voice_arg,
         );
 
         if !self.break_script.is_empty() {

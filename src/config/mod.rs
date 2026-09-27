@@ -22,6 +22,18 @@ pub struct AppConfig {
     #[serde(default = "defaults::default_true")]
     pub popup_enabled: bool,
 
+    #[serde(default = "defaults::default_true")]
+    pub voice_enabled: bool,
+
+    #[serde(default = "defaults::default_true")]
+    pub voice_on_water: bool,
+
+    #[serde(default = "defaults::default_true")]
+    pub voice_on_break: bool,
+
+    #[serde(default = "defaults::default_voice_file")]
+    pub voice_file: String,
+
     #[serde(default)]
     pub water_title: String,
 
@@ -49,6 +61,10 @@ impl Default for AppConfig {
             stagger_minutes: 0,
             sound_enabled: true,
             popup_enabled: true,
+            voice_enabled: true,
+            voice_on_water: true,
+            voice_on_break: true,
+            voice_file: "assets/voice_reminder.mp3".to_string(),
             water_title: "💧 Time to Drink Water!".to_string(),
             water_message: String::new(),
             water_script: String::new(),

@@ -16,6 +16,10 @@ pub fn default_true() -> bool {
     true
 }
 
+pub fn default_voice_file() -> String {
+    "assets/voice_reminder.mp3".to_string()
+}
+
 /// Generates the initial well-commented TOML configuration text.
 pub fn generate_default_toml(default_cfg: &AppConfig) -> String {
     format!(
@@ -37,6 +41,18 @@ sound_enabled = {}
 # Show on-screen pop-up dialog box (in addition to toast notification)
 popup_enabled = {}
 
+# Play AI-generated voice message ("It's time to drink water and get rest")
+voice_enabled = {}
+
+# Play voice message on water reminder
+voice_on_water = {}
+
+# Play voice message on break reminder
+voice_on_break = {}
+
+# Path to voice audio file (leave default or point to a custom .mp3 / .wav file)
+voice_file = "{}"
+
 # Water reminder title and custom message (leave empty to use rotating health tips)
 water_title = "{}"
 water_message = "{}"
@@ -56,6 +72,10 @@ break_script = "{}"
         default_cfg.stagger_minutes,
         default_cfg.sound_enabled,
         default_cfg.popup_enabled,
+        default_cfg.voice_enabled,
+        default_cfg.voice_on_water,
+        default_cfg.voice_on_break,
+        default_cfg.voice_file,
         default_cfg.water_title,
         default_cfg.water_message,
         default_cfg.water_script,
