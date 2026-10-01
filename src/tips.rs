@@ -29,3 +29,24 @@ impl Tips {
         Self::BREAK_TIPS[index % Self::BREAK_TIPS.len()]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_water_tips_rotation() {
+        assert_eq!(Tips::get_water_tip(0), Tips::WATER_TIPS[0]);
+        let len = Tips::WATER_TIPS.len();
+        assert_eq!(Tips::get_water_tip(len), Tips::WATER_TIPS[0]);
+        assert_eq!(Tips::get_water_tip(len + 1), Tips::WATER_TIPS[1]);
+    }
+
+    #[test]
+    fn test_break_tips_rotation() {
+        assert_eq!(Tips::get_break_tip(0), Tips::BREAK_TIPS[0]);
+        let len = Tips::BREAK_TIPS.len();
+        assert_eq!(Tips::get_break_tip(len), Tips::BREAK_TIPS[0]);
+        assert_eq!(Tips::get_break_tip(len + 2), Tips::BREAK_TIPS[2]);
+    }
+}

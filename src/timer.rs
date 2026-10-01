@@ -59,8 +59,9 @@ impl ReminderRunner {
         let now = Instant::now();
         let next_water = if fire_immediately { now } else { now + water_interval };
         let next_break = if fire_immediately {
-            now
-        } else if stagger.as_secs() > 0 && stagger < break_interval {
+            // Stagger break by 2s on immediate start so notifications and voice don't clash
+            now + Duration::from_secs(2)
+        } else if stagger.as_secs() > 0 {
             now + stagger
         } else {
             now + break_interval
@@ -115,12 +116,18 @@ impl ReminderRunner {
 
             if now >= self.next_water {
                 self.trigger_water_reminder();
-                self.next_water = Instant::now() + self.water_interval;
+                self.next_water += self.water_interval;
+                if self.next_water <= now {
+                    self.next_water = now + self.water_interval;
+                }
             }
 
             if now >= self.next_break {
                 self.trigger_break_reminder();
-                self.next_break = Instant::now() + self.break_interval;
+                self.next_break += self.break_interval;
+                if self.next_break <= now {
+                    self.next_break = now + self.break_interval;
+                }
             }
 
             if !self.quiet && now.duration_since(last_status_update) >= Duration::from_millis(500) {
@@ -168,7 +175,7 @@ impl ReminderRunner {
         );
 
         if !self.water_script.is_empty() {
-            let _ = ScriptRunner::execute(&self.water_script, "water", self.water_count);
+            ScriptRunner::execute_async(&self.water_script, "water", self.water_count);
         }
     }
 
@@ -201,7 +208,41 @@ impl ReminderRunner {
         );
 
         if !self.break_script.is_empty() {
-            let _ = ScriptRunner::execute(&self.break_script, "break", self.break_count);
+            ScriptRunner::execute_async(&self.break_script, "break", self.break_count);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_runner_initial_intervals() {
+        let mut cfg = AppConfig::default();
+        cfg.water_interval_mins = 30;
+        cfg.break_interval_mins = 45;
+        cfg.stagger_minutes = 15;
+
+        let runner = ReminderRunner::new(&cfg, false, false, true);
+        assert_eq!(runner.water_interval, Duration::from_secs(1800));
+        assert_eq!(runner.break_interval, Duration::from_secs(2700));
+        assert!(runner.next_break > runner.next_water - Duration::from_secs(1800));
+    }
+
+    #[test]
+    fn test_runner_test_mode_intervals() {
+        let cfg = AppConfig::default();
+        let runner = ReminderRunner::new(&cfg, true, false, true);
+        assert_eq!(runner.water_interval, Duration::from_secs(10));
+        assert_eq!(runner.break_interval, Duration::from_secs(15));
+    }
+
+    #[test]
+    fn test_runner_fire_immediately_stagger() {
+        let cfg = AppConfig::default();
+        let runner = ReminderRunner::new(&cfg, false, true, true);
+        // Break should be staggered slightly after water to prevent race conditions
+        assert!(runner.next_break >= runner.next_water);
     }
 }

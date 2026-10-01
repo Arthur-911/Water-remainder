@@ -110,14 +110,71 @@ impl AppConfig {
             let default_cfg = AppConfig::default();
             let toml_content = defaults::generate_default_toml(&default_cfg);
 
-            let _ = fs::write(path, toml_content);
-            println!(
-                "{} Created default config at {}",
-                "⚙ [Config]".bright_blue().bold(),
-                path.display().to_string().cyan()
-            );
+            if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                let _ = fs::create_dir_all(parent);
+            }
+
+            match fs::write(path, toml_content) {
+                Ok(_) => {
+                    println!(
+                        "{} Created default config at {}",
+                        "⚙ [Config]".bright_blue().bold(),
+                        path.display().to_string().cyan()
+                    );
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{} Could not create default config at {}: {}. Using in-memory defaults.",
+                        "⚠ [Config Warning]".bright_yellow().bold(),
+                        path.display().to_string().cyan(),
+                        e
+                    );
+                }
+            }
         }
 
         AppConfig::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.water_interval_mins, 60);
+        assert_eq!(cfg.break_interval_mins, 60);
+        assert_eq!(cfg.stagger_minutes, 0);
+        assert!(cfg.sound_enabled);
+        assert!(cfg.popup_enabled);
+        assert!(cfg.voice_enabled);
+    }
+
+    #[test]
+    fn test_deserialize_partial_toml() {
+        let toml_str = r#"
+            water_interval_mins = 45
+            break_interval_mins = 50
+            sound_enabled = false
+        "#;
+        let cfg: AppConfig = toml::from_str(toml_str).expect("Should deserialize");
+        assert_eq!(cfg.water_interval_mins, 45);
+        assert_eq!(cfg.break_interval_mins, 50);
+        assert!(!cfg.sound_enabled);
+        // Defaults should be populated
+        assert!(cfg.popup_enabled);
+        assert!(cfg.voice_enabled);
+        assert_eq!(cfg.stagger_minutes, 0);
+    }
+
+    #[test]
+    fn test_generate_and_parse_default_toml() {
+        let default_cfg = AppConfig::default();
+        let toml_str = defaults::generate_default_toml(&default_cfg);
+        let parsed: AppConfig = toml::from_str(&toml_str).expect("Default TOML should parse cleanly");
+        assert_eq!(parsed.water_interval_mins, default_cfg.water_interval_mins);
+        assert_eq!(parsed.break_interval_mins, default_cfg.break_interval_mins);
     }
 }

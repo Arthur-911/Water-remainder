@@ -88,16 +88,8 @@ pub fn render_countdown(
     break_count: usize,
 ) {
     let now = Instant::now();
-    let water_rem = if next_water > now {
-        next_water - now
-    } else {
-        Duration::ZERO
-    };
-    let break_rem = if next_break > now {
-        next_break - now
-    } else {
-        Duration::ZERO
-    };
+    let water_rem = next_water.saturating_duration_since(now);
+    let break_rem = next_break.saturating_duration_since(now);
 
     let time_str = chrono::Local::now().format("%H:%M:%S").to_string();
 
@@ -152,5 +144,31 @@ pub fn format_duration(d: Duration) -> String {
         format!("{:02}m {:02}s", mins, secs)
     } else {
         format!("{}s", secs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_duration_seconds() {
+        assert_eq!(format_duration(Duration::from_secs(0)), "0s");
+        assert_eq!(format_duration(Duration::from_secs(45)), "45s");
+        assert_eq!(format_duration(Duration::from_secs(59)), "59s");
+    }
+
+    #[test]
+    fn test_format_duration_minutes() {
+        assert_eq!(format_duration(Duration::from_secs(60)), "01m 00s");
+        assert_eq!(format_duration(Duration::from_secs(90)), "01m 30s");
+        assert_eq!(format_duration(Duration::from_secs(3599)), "59m 59s");
+    }
+
+    #[test]
+    fn test_format_duration_hours() {
+        assert_eq!(format_duration(Duration::from_secs(3600)), "1h 00m 00s");
+        assert_eq!(format_duration(Duration::from_secs(3665)), "1h 01m 05s");
+        assert_eq!(format_duration(Duration::from_secs(7325)), "2h 02m 05s");
     }
 }

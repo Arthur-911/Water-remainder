@@ -7,6 +7,15 @@ use colored::*;
 static VOICE_PLAYING: AtomicBool = AtomicBool::new(false);
 static EMBEDDED_VOICE_MP3: &[u8] = include_bytes!("../../assets/voice_reminder.mp3");
 
+struct VoiceGuard;
+
+impl Drop for VoiceGuard {
+    fn drop(&mut self) {
+        VOICE_PLAYING.store(false, Ordering::SeqCst);
+    }
+}
+
+#[cfg(windows)]
 #[link(name = "winmm")]
 unsafe extern "system" {
     fn mciSendStringW(
@@ -24,21 +33,21 @@ fn to_wide(s: &str) -> Vec<u16> {
 /// Resolves the voice file path from disk or extracts the embedded MP3 into a temporary directory.
 pub fn resolve_or_extract_audio(custom_file: Option<&str>) -> Option<PathBuf> {
     // 1. Check custom file if supplied
-    if let Some(cf) = custom_file {
-        if !cf.trim().is_empty() {
-            let p = Path::new(cf);
-            if p.is_file() {
-                return Some(p.to_path_buf());
-            }
-            if let Ok(exe) = std::env::current_exe() {
-                if let Some(parent) = exe.parent() {
-                    let candidate = parent.join(cf);
-                    if candidate.is_file() {
-                        return Some(candidate);
-                    }
-                }
-            }
+    if let Some(cf) = custom_file.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let p = Path::new(cf);
+        if p.is_file() {
+            return Some(p.to_path_buf());
         }
+        if let Ok(exe) = std::env::current_exe()
+            && let Some(candidate) = exe.parent().map(|p| p.join(cf)).filter(|p| p.is_file())
+        {
+            return Some(candidate);
+        }
+        eprintln!(
+            "{} Custom voice file '{}' not found. Falling back to default audio.",
+            "⚠ [Voice Warning]".bright_yellow().bold(),
+            cf
+        );
     }
 
     // 2. Check default relative assets/voice_reminder.mp3
@@ -47,13 +56,10 @@ pub fn resolve_or_extract_audio(custom_file: Option<&str>) -> Option<PathBuf> {
         return Some(default_path.to_path_buf());
     }
 
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            let candidate = parent.join("assets").join("voice_reminder.mp3");
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(candidate) = exe.parent().map(|p| p.join("assets").join("voice_reminder.mp3")).filter(|p| p.is_file())
+    {
+        return Some(candidate);
     }
 
     // 3. Fallback: extract embedded MP3 to %TEMP%
@@ -65,15 +71,15 @@ pub fn resolve_or_extract_audio(custom_file: Option<&str>) -> Option<PathBuf> {
         Err(_) => true,
     };
 
-    if needs_write {
-        if let Err(e) = std::fs::write(&temp_audio, EMBEDDED_VOICE_MP3) {
-            eprintln!(
-                "{} Could not extract embedded voice: {}",
-                "⚠ [Voice Warning]".bright_yellow().bold(),
-                e
-            );
-            return None;
-        }
+    if needs_write
+        && let Err(e) = std::fs::write(&temp_audio, EMBEDDED_VOICE_MP3)
+    {
+        eprintln!(
+            "{} Could not extract embedded voice: {}",
+            "⚠ [Voice Warning]".bright_yellow().bold(),
+            e
+        );
+        return None;
     }
 
     Some(temp_audio)
@@ -100,6 +106,8 @@ fn play_internal(resolved_path: Option<PathBuf>) {
         return;
     }
 
+    let _guard = VoiceGuard;
+
     println!(
         "{} {}",
         "🗣 [AI Voice Reminder]".bright_magenta().bold(),
@@ -113,11 +121,11 @@ fn play_internal(resolved_path: Option<PathBuf>) {
         },
         None => {
             fallback_tts();
-            VOICE_PLAYING.store(false, Ordering::SeqCst);
             return;
         }
     };
 
+    #[cfg(windows)]
     let play_success = unsafe {
         mciSendStringW(to_wide("close reminder_voice").as_ptr(), std::ptr::null_mut(), 0, std::ptr::null_mut());
         let open_cmd = format!(r#"open "{}" type mpegvideo alias reminder_voice"#, clean_path);
@@ -132,21 +140,30 @@ fn play_internal(resolved_path: Option<PathBuf>) {
         }
     };
 
+    #[cfg(not(windows))]
+    let play_success = false;
+
     if !play_success {
         fallback_play(&clean_path);
     }
-
-    VOICE_PLAYING.store(false, Ordering::SeqCst);
 }
 
 fn fallback_play(path: &str) {
-    let escaped = path.replace('\'', "''");
-    let script = format!(
-        r#"Add-Type -AssemblyName presentationCore; $p = New-Object System.Windows.Media.MediaPlayer; $p.Open([System.Uri]'{}'); $p.Play(); Start-Sleep -Seconds 3; $p.Close()"#,
-        escaped
-    );
+    let script = r#"
+param([string]$audioPath)
+try {
+    Add-Type -AssemblyName presentationCore
+    $p = New-Object System.Windows.Media.MediaPlayer
+    $p.Open([System.Uri]$audioPath)
+    $p.Play()
+    Start-Sleep -Seconds 3
+    $p.Close()
+} catch {
+    exit 1
+}
+"#;
     let res = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .args(["-NoProfile", "-NonInteractive", "-Command", script, "-audioPath", path])
         .status();
 
     if res.map(|s| !s.success()).unwrap_or(true) {

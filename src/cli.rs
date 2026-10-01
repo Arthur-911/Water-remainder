@@ -42,13 +42,25 @@ pub struct Cli {
     #[arg(long = "now")]
     pub now: bool,
 
+    /// Enable notification sound
+    #[arg(long = "sound", overrides_with = "no_sound")]
+    pub sound: bool,
+
     /// Disable notification sound
     #[arg(long = "no-sound")]
     pub no_sound: bool,
 
+    /// Enable on-screen pop-up dialog box
+    #[arg(long = "popup", overrides_with = "no_popup")]
+    pub popup: bool,
+
     /// Disable on-screen pop-up dialog box (toast notification only)
     #[arg(long = "no-popup")]
     pub no_popup: bool,
+
+    /// Enable AI voice reminder message
+    #[arg(long = "voice", overrides_with = "no_voice")]
+    pub voice: bool,
 
     /// Disable AI voice reminder message
     #[arg(long = "no-voice")]
@@ -85,17 +97,96 @@ impl Cli {
         if let Some(ref bs) = self.break_script {
             cfg.break_script = bs.clone();
         }
-        if self.no_sound {
+        if self.sound {
+            cfg.sound_enabled = true;
+        } else if self.no_sound {
             cfg.sound_enabled = false;
         }
-        if self.no_popup {
+        if self.popup {
+            cfg.popup_enabled = true;
+        } else if self.no_popup {
             cfg.popup_enabled = false;
         }
-        if self.no_voice {
+        if self.voice {
+            cfg.voice_enabled = true;
+        } else if self.no_voice {
             cfg.voice_enabled = false;
         }
         if let Some(ref vf) = self.voice_file {
             cfg.voice_file = vf.clone();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_apply_to_config_intervals() {
+        let mut cfg = AppConfig::default();
+        let cli = Cli {
+            water: Some(45),
+            break_interval: Some(30),
+            stagger: Some(15),
+            config: PathBuf::from("reminder_config.toml"),
+            water_script: Some("test_water.bat".to_string()),
+            break_script: Some("test_break.bat".to_string()),
+            test: false,
+            now: false,
+            sound: false,
+            no_sound: true,
+            popup: false,
+            no_popup: true,
+            voice: false,
+            no_voice: true,
+            voice_file: Some("assets/custom.mp3".to_string()),
+            test_voice: false,
+            quiet: false,
+        };
+
+        cli.apply_to_config(&mut cfg);
+        assert_eq!(cfg.water_interval_mins, 45);
+        assert_eq!(cfg.break_interval_mins, 30);
+        assert_eq!(cfg.stagger_minutes, 15);
+        assert_eq!(cfg.water_script, "test_water.bat");
+        assert_eq!(cfg.break_script, "test_break.bat");
+        assert!(!cfg.sound_enabled);
+        assert!(!cfg.popup_enabled);
+        assert!(!cfg.voice_enabled);
+        assert_eq!(cfg.voice_file, "assets/custom.mp3");
+    }
+
+    #[test]
+    fn test_apply_to_config_enable_flags() {
+        let mut cfg = AppConfig::default();
+        cfg.sound_enabled = false;
+        cfg.popup_enabled = false;
+        cfg.voice_enabled = false;
+
+        let cli = Cli {
+            water: None,
+            break_interval: None,
+            stagger: None,
+            config: PathBuf::from("reminder_config.toml"),
+            water_script: None,
+            break_script: None,
+            test: false,
+            now: false,
+            sound: true,
+            no_sound: false,
+            popup: true,
+            no_popup: false,
+            voice: true,
+            no_voice: false,
+            voice_file: None,
+            test_voice: false,
+            quiet: false,
+        };
+
+        cli.apply_to_config(&mut cfg);
+        assert!(cfg.sound_enabled);
+        assert!(cfg.popup_enabled);
+        assert!(cfg.voice_enabled);
     }
 }

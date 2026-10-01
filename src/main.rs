@@ -21,7 +21,9 @@ fn main() {
     let mut cfg = AppConfig::load_or_create(&cli.config);
     cli.apply_to_config(&mut cfg);
 
-    ui::print_banner();
+    if !cli.quiet {
+        ui::print_banner();
+    }
 
     if cli.test_voice {
         println!("{}", "Testing AI voice message...".bright_cyan());

@@ -159,17 +159,20 @@ You can run the binary directly or via `run.bat` with command-line flags:
 # Run quietly (no countdown bar, ideal for background services)
 .\run.bat --quiet
 
-# Disable AI voice message
+# Disable or enable AI voice message
 .\run.bat --no-voice
+.\run.bat --voice
 
 # Point to a custom voice file
 .\run.bat --voice-file "assets\custom_voice.mp3"
 
-# Disable sound chime
+# Disable or enable sound chime
 .\run.bat --no-sound
+.\run.bat --sound
 
-# Disable pop-up window (toast notification only)
+# Disable or enable pop-up window (toast notification only)
 .\run.bat --no-popup
+.\run.bat --popup
 ```
 
 ---

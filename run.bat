@@ -2,6 +2,16 @@
 setlocal
 cd /d "%~dp0"
 
+if not exist "%~dp0target\release\reminder_runner.exe" (
+    echo Binary not found. Building reminder_runner in release mode...
+    cargo build --release
+    if errorlevel 1 (
+        echo [Error] Cargo build failed.
+        pause
+        exit /b 1
+    )
+)
+
 if not "%~1"=="" (
     "%~dp0target\release\reminder_runner.exe" %*
     goto :eof
