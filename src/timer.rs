@@ -49,10 +49,13 @@ impl ReminderRunner {
                 Duration::from_secs(5),
             )
         } else {
+            let safe_water = cfg.water_interval_mins.clamp(1, 10080);
+            let safe_break = cfg.break_interval_mins.clamp(1, 10080);
+            let safe_stagger = cfg.stagger_minutes.clamp(0, 10080);
             (
-                Duration::from_secs(cfg.water_interval_mins * 60),
-                Duration::from_secs(cfg.break_interval_mins * 60),
-                Duration::from_secs(cfg.stagger_minutes * 60),
+                Duration::from_secs(safe_water.saturating_mul(60)),
+                Duration::from_secs(safe_break.saturating_mul(60)),
+                Duration::from_secs(safe_stagger.saturating_mul(60)),
             )
         };
 
@@ -244,5 +247,15 @@ mod tests {
         let runner = ReminderRunner::new(&cfg, false, true, true);
         // Break should be staggered slightly after water to prevent race conditions
         assert!(runner.next_break >= runner.next_water);
+    }
+
+    #[test]
+    fn test_runner_zero_interval_clamping() {
+        let mut cfg = AppConfig::default();
+        cfg.water_interval_mins = 0;
+        cfg.break_interval_mins = 0;
+        let runner = ReminderRunner::new(&cfg, false, false, true);
+        assert_eq!(runner.water_interval, Duration::from_secs(60));
+        assert_eq!(runner.break_interval, Duration::from_secs(60));
     }
 }

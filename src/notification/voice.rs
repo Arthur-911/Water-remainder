@@ -30,6 +30,20 @@ fn to_wide(s: &str) -> Vec<u16> {
     OsStr::new(s).encode_wide().chain(Some(0)).collect()
 }
 
+fn get_powershell_exe() -> PathBuf {
+    if let Ok(sysroot) = std::env::var("SystemRoot") {
+        let candidate = PathBuf::from(sysroot)
+            .join("System32")
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe");
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    PathBuf::from("powershell.exe")
+}
+
 /// Resolves the voice file path from disk or extracts the embedded MP3 into a temporary directory.
 pub fn resolve_or_extract_audio(custom_file: Option<&str>) -> Option<PathBuf> {
     // 1. Check custom file if supplied
@@ -62,12 +76,12 @@ pub fn resolve_or_extract_audio(custom_file: Option<&str>) -> Option<PathBuf> {
         return Some(candidate);
     }
 
-    // 3. Fallback: extract embedded MP3 to %TEMP%
+    // 3. Fallback: extract embedded MP3 to %TEMP% with byte-level integrity verification
     let temp_dir = std::env::temp_dir();
     let temp_audio = temp_dir.join("reminder_voice_ai.mp3");
 
-    let needs_write = match std::fs::metadata(&temp_audio) {
-        Ok(meta) => meta.len() as usize != EMBEDDED_VOICE_MP3.len(),
+    let needs_write = match std::fs::read(&temp_audio) {
+        Ok(existing) => existing != EMBEDDED_VOICE_MP3,
         Err(_) => true,
     };
 
@@ -125,6 +139,15 @@ fn play_internal(resolved_path: Option<PathBuf>) {
         }
     };
 
+    if clean_path.contains('"') || clean_path.contains('\n') || clean_path.contains('\r') {
+        eprintln!(
+            "{} Audio path contains invalid characters. Using fallback TTS.",
+            "⚠ [Voice Warning]".bright_yellow().bold()
+        );
+        fallback_tts();
+        return;
+    }
+
     #[cfg(windows)]
     let play_success = unsafe {
         mciSendStringW(to_wide("close reminder_voice").as_ptr(), std::ptr::null_mut(), 0, std::ptr::null_mut());
@@ -150,11 +173,10 @@ fn play_internal(resolved_path: Option<PathBuf>) {
 
 fn fallback_play(path: &str) {
     let script = r#"
-param([string]$audioPath)
 try {
     Add-Type -AssemblyName presentationCore
     $p = New-Object System.Windows.Media.MediaPlayer
-    $p.Open([System.Uri]$audioPath)
+    $p.Open([System.Uri]$env:REMINDER_AUDIO_PATH)
     $p.Play()
     Start-Sleep -Seconds 3
     $p.Close()
@@ -162,8 +184,11 @@ try {
     exit 1
 }
 "#;
-    let res = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script, "-audioPath", path])
+    let ps = get_powershell_exe();
+    let res = std::process::Command::new(ps)
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Restricted", "-Command", script])
+        .env("REMINDER_AUDIO_PATH", path)
+        .stdin(std::process::Stdio::null())
         .status();
 
     if res.map(|s| !s.success()).unwrap_or(true) {
@@ -172,12 +197,16 @@ try {
 }
 
 fn fallback_tts() {
-    let _ = std::process::Command::new("powershell")
+    let ps = get_powershell_exe();
+    let _ = std::process::Command::new(ps)
         .args([
             "-NoProfile",
             "-NonInteractive",
+            "-ExecutionPolicy",
+            "Restricted",
             "-Command",
             r#"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak("It's time to drink water and get rest")"#,
         ])
+        .stdin(std::process::Stdio::null())
         .status();
 }

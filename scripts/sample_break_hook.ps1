@@ -5,6 +5,12 @@
 #   $env:REMINDER_TIME      - ISO timestamp
 
 $logPath = Join-Path $PSScriptRoot "reminder_log.txt"
+if (Test-Path $logPath) {
+    $item = Get-Item $logPath
+    if ($item.Length -gt 524288) {
+        Move-Item -Path $logPath -Destination "$logPath.bak" -Force
+    }
+}
 $entry = "[$($env:REMINDER_TIME)] Break reminder triggered (#$($env:REMINDER_COUNT))"
 Add-Content -Path $logPath -Value $entry
 

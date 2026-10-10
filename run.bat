@@ -29,14 +29,14 @@ echo   [4] Test AI Voice     - Play AI voice message ("It's time to drink water 
 echo   [5] Stop Background   - Stop background runner
 echo   [6] Exit
 echo =======================================================
-set /p choice="Select an option [1-6]: "
+choice /C 123456 /N /M "Select an option [1-6]: "
 
-if "%choice%"=="1" goto interactive
-if "%choice%"=="2" goto background
-if "%choice%"=="3" goto test
-if "%choice%"=="4" goto voice
-if "%choice%"=="5" goto stop
-if "%choice%"=="6" goto :eof
+if "%ERRORLEVEL%"=="1" goto interactive
+if "%ERRORLEVEL%"=="2" goto background
+if "%ERRORLEVEL%"=="3" goto test
+if "%ERRORLEVEL%"=="4" goto voice
+if "%ERRORLEVEL%"=="5" goto stop
+if "%ERRORLEVEL%"=="6" goto :eof
 goto menu
 
 :interactive

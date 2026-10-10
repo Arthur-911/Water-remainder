@@ -5,5 +5,13 @@
 ::   %REMINDER_COUNT%     - e.g. 1, 2, 3...
 ::   %REMINDER_TIME%      - ISO timestamp
 ::
-echo [%REMINDER_TIME%] Water reminder triggered (#%REMINDER_COUNT%) >> "%~dp0\reminder_log.txt"
+set "LOG_FILE=%~dp0reminder_log.txt"
+if exist "%LOG_FILE%" (
+    for %%F in ("%LOG_FILE%") do (
+        if %%~zF GTR 524288 (
+            move /y "%LOG_FILE%" "%LOG_FILE%.bak" >nul
+        )
+    )
+)
+echo [%REMINDER_TIME%] Water reminder triggered (#%REMINDER_COUNT%) >> "%LOG_FILE%"
 echo [Hook] Water reminder logged successfully to reminder_log.txt

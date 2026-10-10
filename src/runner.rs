@@ -1,19 +1,58 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use colored::*;
+
+static SCRIPT_RUNNING: AtomicBool = AtomicBool::new(false);
+
+fn get_cmd_exe() -> PathBuf {
+    if let Ok(sysroot) = std::env::var("SystemRoot") {
+        let candidate = PathBuf::from(sysroot).join("System32").join("cmd.exe");
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    PathBuf::from("cmd.exe")
+}
+
+fn get_powershell_exe() -> PathBuf {
+    if let Ok(sysroot) = std::env::var("SystemRoot") {
+        let candidate = PathBuf::from(sysroot)
+            .join("System32")
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe");
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    PathBuf::from("powershell.exe")
+}
 
 pub struct ScriptRunner;
 
 impl ScriptRunner {
     /// Executes a custom script or command in a background thread to prevent blocking the timer.
+    /// Limits concurrent script execution to avoid thread and resource exhaustion.
     pub fn execute_async(script_or_cmd: &str, reminder_type: &str, count: usize) {
         let script = script_or_cmd.trim().to_string();
         if script.is_empty() {
             return;
         }
+
+        if SCRIPT_RUNNING.swap(true, Ordering::SeqCst) {
+            eprintln!(
+                "{} Previous script hook is still running. Skipping execution to avoid overlap.",
+                "⚠ [ScriptRunner Warning]".bright_yellow().bold()
+            );
+            return;
+        }
+
         let reminder_type = reminder_type.to_string();
         std::thread::spawn(move || {
             let _ = Self::execute(&script, &reminder_type, count);
+            SCRIPT_RUNNING.store(false, Ordering::SeqCst);
         });
     }
 
@@ -55,12 +94,12 @@ impl ScriptRunner {
 
             match ext.as_str() {
                 "ps1" => {
-                    let mut c = Command::new("powershell.exe");
-                    c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &target_str]);
+                    let mut c = Command::new(get_powershell_exe());
+                    c.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "RemoteSigned", "-File", &target_str]);
                     c
                 }
                 "bat" | "cmd" => {
-                    let mut c = Command::new("cmd.exe");
+                    let mut c = Command::new(get_cmd_exe());
                     c.args(["/C", &target_str]);
                     c
                 }
@@ -72,44 +111,84 @@ impl ScriptRunner {
                 _ => Command::new(&target_str),
             }
         } else {
-            // Treat as raw shell command
-            let mut c = Command::new("cmd.exe");
+            // Reject dangerous shell metacharacters to prevent command chaining / injection
+            let contains_unsafe_shell = trimmed.chars().any(|ch| {
+                matches!(ch, '&' | '|' | ';' | '<' | '>' | '`' | '$' | '\n' | '\r')
+            });
+
+            if contains_unsafe_shell {
+                let err_msg = "Script execution rejected: command contains unsafe shell metacharacters (&, |, ;, <, >, `, $)".to_string();
+                eprintln!("{} {}", "  ↳ Error:".bright_red(), err_msg);
+                return Err(err_msg);
+            }
+
+            let mut c = Command::new(get_cmd_exe());
             c.args(["/C", trimmed]);
             c
         };
 
-        // Pass context environment variables so user scripts know what triggered them
+        // Pass context environment variables so user scripts know what triggered them.
+        // Redirect stdin to null so scripts cannot deadlock waiting for user input.
         cmd.env("REMINDER_TYPE", reminder_type)
             .env("REMINDER_COUNT", count.to_string())
             .env("REMINDER_TIME", chrono::Local::now().to_rfc3339())
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        match cmd.output() {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
-                if output.status.success() {
-                    if !stdout.is_empty() {
-                        println!("{} Output: {}", "  ↳".bright_green(), stdout);
-                    }
-                    Ok(stdout)
-                } else {
-                    let err_msg = format!(
-                        "Script failed (exit code {:?}): {}",
-                        output.status.code(),
-                        if !stderr.is_empty() { stderr } else { stdout }
-                    );
-                    eprintln!("{} {}", "  ↳ Error:".bright_red(), err_msg);
-                    Err(err_msg)
-                }
-            }
+        let child = match cmd.spawn() {
+            Ok(c) => c,
             Err(e) => {
                 let err_msg = format!("Failed to spawn process: {}", e);
                 eprintln!("{} {}", "  ↳ Error:".bright_red(), err_msg);
-                Err(err_msg)
+                return Err(err_msg);
             }
+        };
+
+        let child_id = child.id();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let res = child.wait_with_output();
+            let _ = tx.send(res);
+        });
+
+        // 30-second execution timeout guard to prevent hung processes from blocking indefinitely
+        let output = match rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(Ok(out)) => out,
+            Ok(Err(e)) => {
+                let err_msg = format!("Failed to read process output: {}", e);
+                eprintln!("{} {}", "  ↳ Error:".bright_red(), err_msg);
+                return Err(err_msg);
+            }
+            Err(_) => {
+                #[cfg(windows)]
+                {
+                    let _ = Command::new("taskkill")
+                        .args(["/F", "/PID", &child_id.to_string()])
+                        .output();
+                }
+                let err_msg = "Script timed out after 30 seconds and was terminated".to_string();
+                eprintln!("{} {}", "  ↳ Error:".bright_red(), err_msg);
+                return Err(err_msg);
+            }
+        };
+
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+        if output.status.success() {
+            if !stdout.is_empty() {
+                println!("{} Output: {}", "  ↳".bright_green(), stdout);
+            }
+            Ok(stdout)
+        } else {
+            let err_msg = format!(
+                "Script failed (exit code {:?}): {}",
+                output.status.code(),
+                if !stderr.is_empty() { stderr } else { stdout }
+            );
+            eprintln!("{} {}", "  ↳ Error:".bright_red(), err_msg);
+            Err(err_msg)
         }
     }
 }
@@ -137,5 +216,12 @@ mod tests {
         let res = ScriptRunner::execute("echo Hello from runner test", "water", 1);
         assert!(res.is_ok());
         assert!(res.unwrap().contains("Hello from runner test"));
+    }
+
+    #[test]
+    fn test_execute_rejects_shell_injection() {
+        let res = ScriptRunner::execute("echo safe & echo injected", "water", 1);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("unsafe shell metacharacters"));
     }
 }
